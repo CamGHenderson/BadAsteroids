@@ -1,9 +1,9 @@
-#include<iostream>
+#include<math.h>
 #include<SFML/Graphics.hpp>
 
 // define window stuff
 const std::string title = "Bad Asteroids";
-const unsigned int width = 1280, height = 720;
+const unsigned int width = 1120, height = 630;
 
 // define pi
 const float pi = 3.14159265358979323846f;
@@ -15,7 +15,6 @@ struct GameObject
     sf::Color color;
     sf::Vector2f position;
     float angle = 0.0f;
-    bool wrap = false;
 };
 
 // struct for lines
@@ -29,40 +28,33 @@ struct Line
 bool objectsIntersect(GameObject& gameObject0, GameObject& gameObject1)
 {
     std::vector<Line> lines;
+    
+    return false;
 }
 
 // method for rendering game objects to the window
 void render(GameObject& gameObject, sf::RenderWindow& window)
 {
-    sf::ConvexShape polygon = sf::ConvexShape();
+	// this is quite stupid
+    render(gameObject, gameObject.position.x, gameObject.position.y, window);
+}
+
+// method for rendering game objects with independent x and y (bad way of doing this)
+void render(GameObject& gameObject, float x, float y, sf::RenderWindow& window)
+{
+	/* 
+		this not a very good way of doing this but it also run at a decent speed on my
+		garbage laptop too so I don't care.
+	*/
+	
+	sf::ConvexShape polygon = sf::ConvexShape();
     polygon.setPointCount(gameObject.model.size());
     for (unsigned int i = 0; i < gameObject.model.size(); i++)
         polygon.setPoint(i, gameObject.model[i]);
-
-    if (gameObject.wrap)
-    {
-        if (gameObject.position.x > width)
-        {
-            gameObject.position.x = 0.0f;
-        }
-        else if (gameObject.position.x < 0)
-        {
-            gameObject.position.x = (float)width;
-        }
-
-        if (gameObject.position.y > height)
-        {
-            gameObject.position.y = 0.0f;
-        }
-        else if (gameObject.position.y < 0)
-        {
-            gameObject.position.y = (float)height;
-        }
-    }
     polygon.setOutlineThickness(1.0f);
     polygon.setOutlineColor(gameObject.color);
     polygon.setFillColor(sf::Color::Transparent);
-    polygon.setPosition(gameObject.position);
+    polygon.setPosition(sf::Vector2f(x, y));
     polygon.setRotation(gameObject.angle);
     window.draw(polygon);
 }
@@ -98,7 +90,6 @@ int main()
     player.color = sf::Color::White;
     player.position = sf::Vector2f((float)width / 2, (float)height / 2);
     player.angle = 0.0f;
-    player.wrap = true;
 
     // variables for player transformation
     const float playerAccelerationSpeed = 150.0f;
@@ -107,7 +98,9 @@ int main()
     // for player acceleration and drift
     float playerDirectionX = 0.0f;
     float playerDirectionY = 0.0f;
-
+	
+	std::vector<GameObject> 
+	
     // clock for getting delta time
     sf::Clock deltaClock;
 
@@ -126,7 +119,7 @@ int main()
             }
         }
 
-        // get delta time from deltaClock
+        // get delta time from deltaClock and reset deltaClock
         float deltaTime = deltaClock.restart().asSeconds();
 
         // handle player rotation
@@ -140,22 +133,59 @@ int main()
             player.angle += playerRotationSpeed * deltaTime;
         }
 
-        // handle player move and player drift
+        // handle player movement and player drift
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up))
         {
             // add to acceleration
-            playerDirectionX += cosf((player.angle - 90.0f) * pi / 180) * playerAccelerationSpeed * deltaTime;
-            playerDirectionY += sinf((player.angle - 90.0f) * pi / 180) * playerAccelerationSpeed * deltaTime;
+            playerDirectionX += cos((player.angle - 90.0f) * pi / 180) * playerAccelerationSpeed * deltaTime;
+            playerDirectionY += sin((player.angle - 90.0f) * pi / 180) * playerAccelerationSpeed * deltaTime;
         }
-
+		
         // actually move the player
         player.position.x += playerDirectionX * deltaTime;
         player.position.y += playerDirectionY * deltaTime; 
+        
+        // handle player wrapping (for coords)
+        if (player.position.x > width)
+        {
+            player.position.x = 0.0f;
+        }
+        else if (player.position.x < 0)
+        {
+            player.position.x = (float)width;
+        }
 
+        if (player.position.y > height)
+        {
+            player.position.y = 0.0f;
+        }
+        else if (player.position.y < 0)
+        {
+            player.position.y = (float)height;
+        }
+		
         // render and update game
         window.clear(sf::Color::Black);
 
         render(player, window);
+        
+        // handle effect (for graphics)
+        if(player.position.x + 12 >= width)
+        {
+        	render(player, player.position.x - width, player.position.y, window);
+        }
+        else if(player.position.x - 12 <= 0)
+        {
+        	render(player, width + player.position.x, player.position.y, window);
+        }
+        else if(player.position.y + 12 >= height)
+        {
+        	render(player, player.position.x, player.position.y - height, window);
+        }
+        else if(player.position.y - 12 <= 0)
+        {
+        	render(player, player.position.x, height + player.position.y, window);
+        }
 
         window.display();
     }
