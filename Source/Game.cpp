@@ -1,44 +1,112 @@
+#include<iostream>
 #include<SFML/Graphics.hpp>
 
-std::string title = "Bad Asteroids";
-unsigned int width = 1280, height = 720;
+// define window stuff
+const std::string title = "Bad Asteroids";
+const unsigned int width = 1280, height = 720;
 
+// define pi
+const float pi = 3.14159265358979323846f;
+
+// struct for wireframe models
 struct GameObject
 {
-    sf::ConvexShape polygon;
+    std::vector<sf::Vector2f> model;
     sf::Color color;
     sf::Vector2f position;
-    float angle;
+    float angle = 0.0f;
+    bool wrap = false;
 };
 
+// struct for lines
+struct Line
+{
+    sf::Vector2f point0;
+    sf::Vector2f point1;
+};
+
+// method for if objects intersect
+bool objectsIntersect(GameObject& gameObject0, GameObject& gameObject1)
+{
+    std::vector<Line> lines;
+}
+
+// method for rendering game objects to the window
 void render(GameObject& gameObject, sf::RenderWindow& window)
 {
-    gameObject.polygon.setPosition(gameObject.position);
-    window.draw(gameObject.polygon);
+    sf::ConvexShape polygon = sf::ConvexShape();
+    polygon.setPointCount(gameObject.model.size());
+    for (unsigned int i = 0; i < gameObject.model.size(); i++)
+        polygon.setPoint(i, gameObject.model[i]);
+
+    if (gameObject.wrap)
+    {
+        if (gameObject.position.x > width)
+        {
+            gameObject.position.x = 0.0f;
+        }
+        else if (gameObject.position.x < 0)
+        {
+            gameObject.position.x = (float)width;
+        }
+
+        if (gameObject.position.y > height)
+        {
+            gameObject.position.y = 0.0f;
+        }
+        else if (gameObject.position.y < 0)
+        {
+            gameObject.position.y = (float)height;
+        }
+    }
+    polygon.setOutlineThickness(1.0f);
+    polygon.setOutlineColor(gameObject.color);
+    polygon.setFillColor(sf::Color::Transparent);
+    polygon.setPosition(gameObject.position);
+    polygon.setRotation(gameObject.angle);
+    window.draw(polygon);
 }
 
 int main()
 {   
     // create window
 	sf::RenderWindow window;
-    
-    // set window size, title, and make window not resizable
-	window.create(sf::VideoMode(width, height), title, sf::Style::Titlebar | sf::Style::Close);
+        
+    // create context with antialiasing
+    sf::ContextSettings contextSettings;
+    contextSettings.antialiasingLevel = 8;
+
+    // set window size, title, disable resizing, and enable antialiasing 
+	window.create(sf::VideoMode(width, height), title, sf::Style::Titlebar | sf::Style::Close, contextSettings);
     
     // cap framerate
     window.setFramerateLimit(500);
 
-    // shape garbage
-    sf::ConvexShape playerShape;
-    playerShape.setPointCount(4);
-    playerShape.setPoint(0, sf::Vector2f(0.0f, -12.0f));
-    playerShape.setPoint(1, sf::Vector2f(6.0f, 12.0f));
-    playerShape.setPoint(2, sf::Vector2f(0.0f, 7.0f));
-    playerShape.setPoint(3, sf::Vector2f(-6.0f, 12.0f));
-    playerShape.setOutlineThickness(1.2f);
-    playerShape.setFillColor(sf::Color::Transparent);
-    playerShape.setOutlineColor(sf::Color::White);
-    playerShape.setPosition(width / 4, height / 4);
+    // make keys work properly
+    window.setKeyRepeatEnabled(true);
+
+    // construct player
+    GameObject player;
+
+    // define player shape
+    player.model.push_back(sf::Vector2f(0.0f, -12.0f));
+    player.model.push_back(sf::Vector2f(6.0f, 12.0f));
+    player.model.push_back(sf::Vector2f(0.0f, 7.0f));
+    player.model.push_back(sf::Vector2f(-6.0f, 12.0f));
+
+    // other player setup stuff
+    player.color = sf::Color::White;
+    player.position = sf::Vector2f((float)width / 2, (float)height / 2);
+    player.angle = 0.0f;
+    player.wrap = true;
+
+    // variables for player transformation
+    const float playerAccelerationSpeed = 150.0f;
+    const float playerRotationSpeed = 180.0f;
+
+    // for player acceleration and drift
+    float playerDirectionX = 0.0f;
+    float playerDirectionY = 0.0f;
 
     // clock for getting delta time
     sf::Clock deltaClock;
@@ -61,11 +129,33 @@ int main()
         // get delta time from deltaClock
         float deltaTime = deltaClock.restart().asSeconds();
 
+        // handle player rotation
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left))
+        {
+            player.angle -= playerRotationSpeed * deltaTime;
+        }
+
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right))
+        {
+            player.angle += playerRotationSpeed * deltaTime;
+        }
+
+        // handle player move and player drift
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up))
+        {
+            // add to acceleration
+            playerDirectionX += cosf((player.angle - 90.0f) * pi / 180) * playerAccelerationSpeed * deltaTime;
+            playerDirectionY += sinf((player.angle - 90.0f) * pi / 180) * playerAccelerationSpeed * deltaTime;
+        }
+
+        // actually move the player
+        player.position.x += playerDirectionX * deltaTime;
+        player.position.y += playerDirectionY * deltaTime; 
+
         // render and update game
         window.clear(sf::Color::Black);
 
-        playerShape.move(deltaTime * 10.0f, 0.0f);
-        window.draw(playerShape);
+        render(player, window);
 
         window.display();
     }
