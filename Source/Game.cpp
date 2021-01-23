@@ -4,8 +4,14 @@
 // 2D graphics library
 #include<SFML/Graphics.hpp>
 
+// stupid audio library
+#include<SFML/Audio.hpp>
+
 // collision library because I'm to lazy to figure out how to do polygon collisions
 #include"clipper.hpp"
+
+// include for saving high score
+#include<fstream>
 
 // define window stuff
 const std::string title = "Bad Asteroids";
@@ -14,6 +20,7 @@ const unsigned int width = 1280, height = 720;
 // define pi
 const float pi = 3.14159265358979323846f;
 
+// enum for managing game state
 enum class GameState
 {
     Title,
@@ -43,6 +50,14 @@ struct Asteroid : public GameObject
 
     // stupid bounds thing
     float longestDistance = 0.0f;
+};
+
+// particle struct
+struct Particle
+{
+    sf::Vector2f position;
+    sf::Vector2f moveDirection;
+    float steps = 0.0f;
 };
 
 // gets where point should be when it is rotated
@@ -244,6 +259,65 @@ void render(GameObject& gameObject, sf::RenderWindow& window)
     render(gameObject, gameObject.position.x, gameObject.position.y, window);
 }
 
+// for rendering particles
+void render(Particle* particle, sf::RenderWindow& window)
+{
+    sf::CircleShape circle(1.5f);
+    circle.setPosition(particle->position);
+    circle.setFillColor(sf::Color::White);
+    window.draw(circle);
+}
+
+// don't worry about it FBI
+void createExplosion(std::vector<Particle*>& particles, sf::Vector2f& position)
+{
+    unsigned int amountOfParticles = (rand() % 30) + 10;
+    for (unsigned int i = 0; i < amountOfParticles; i++)
+    {
+        Particle* particle = new Particle();
+        particle->position = position;
+        float speed = (float)((rand() % 300) + 100);
+        particle->moveDirection.x = cos((360 / amountOfParticles * i) * pi / 180) * speed;
+        particle->moveDirection.y = sin((360 / amountOfParticles * i) * pi / 180) * speed;
+        particles.push_back(particle);
+    }                               
+}
+
+// epic save method
+void saveHighScore(unsigned int highScore)
+{
+    std::ofstream out;
+    out.open("save.dat", std::ofstream::out | std::ofstream::trunc);
+    std::string text = std::to_string(highScore);
+    out.write(text.c_str(), text.length() + 1);
+    out.close();
+}
+
+// epic read method
+unsigned int readHighScore()
+{
+    unsigned int highScore = 0;
+    std::ifstream in;
+    in.open("save.dat");
+    if (in.is_open())
+    {
+        std::string text;
+        std::getline(in, text, '\0');
+        highScore = std::stoi(text);
+        in.close();
+    }
+    return highScore;
+}
+
+// play sound buffer from file
+void playSound(std::vector<sf::Sound*>& sounds, sf::SoundBuffer& buffer)
+{
+    sf::Sound* sound = new sf::Sound();
+    sound->setBuffer(buffer);
+    sound->play();
+    sounds.push_back(sound);
+}
+
 int main()
 {
     // create window
@@ -261,6 +335,11 @@ int main()
 
     // make keys work properly
     window.setKeyRepeatEnabled(true);
+    
+    // set window icon
+    sf::Image icon;
+    icon.loadFromFile("Resources/Icons/icon.png");
+    window.setIcon(icon.getSize().x, icon.getSize().y, icon.getPixelsPtr());
 
     // construct player
     GameObject player;
@@ -311,17 +390,28 @@ int main()
     float asteroidSpawnTime;
     unsigned int asteroidSpawnCount;
 
+    // stupid particle stuff
+    std::vector<Particle*> particles;
+
     // stupid font
     sf::Font font;
     font.loadFromFile("Resources/Fonts/stupid_font.ttf");
 
     // score stuff
+    unsigned int highScore = readHighScore();
+    sf::Text highScoreLabel;
+    highScoreLabel.setFont(font);
+    highScoreLabel.setCharacterSize(14);
+    highScoreLabel.setFillColor(sf::Color::White);
+    highScoreLabel.setPosition(25.0f, 25.0f);
+    highScoreLabel.setString("High Score: " + std::to_string(highScore));
+
     unsigned int score;
     sf::Text scoreLabel;
     scoreLabel.setFont(font);
     scoreLabel.setCharacterSize(14);
     scoreLabel.setFillColor(sf::Color::White);
-    scoreLabel.setPosition(25.0f, 25.0f);
+    scoreLabel.setPosition(25.0f, 50.0f);
 
     // title screen garbage
     sf::Text titleLabel;
@@ -348,6 +438,31 @@ int main()
 
     // color button should be if mouse is hovering over button
     sf::Color hoverColor = sf::Color(120, 120, 120);
+
+    // stupid game over label
+    sf::Text gameOverLabel;
+    gameOverLabel.setFont(font);
+    gameOverLabel.setCharacterSize(50);
+    gameOverLabel.setFillColor(sf::Color::White);
+    gameOverLabel.setString("Game Over");
+    gameOverLabel.setPosition((float)(width / 2.0f) - (float)(gameOverLabel.getLocalBounds().width / 2.0f), 300.0f);
+
+    // new high score label
+    sf::Text newHighScoreLabel;
+    newHighScoreLabel.setFont(font);
+    newHighScoreLabel.setCharacterSize(15);
+    newHighScoreLabel.setFillColor(sf::Color::White);
+    newHighScoreLabel.setString("New High Score");
+    newHighScoreLabel.setPosition((float)(width / 2.0f) - (float)(newHighScoreLabel.getLocalBounds().width / 2.0f), 380.0f);
+
+    // sound garbage
+    sf::SoundBuffer shootBuffer;
+    shootBuffer.loadFromFile("Resources/Sounds/shoot.wav");
+
+    std::vector<sf::Sound*> sounds;
+
+    sf::SoundBuffer explosionBuffer;
+    explosionBuffer.loadFromFile("Resources/Sounds/explosion.wav");
 
     // game state garbage
     GameState gameState = GameState::Title;
@@ -409,6 +524,9 @@ int main()
 
                     asteroidSpawnTime = 1.0f;
                     asteroidSpawnCount = 0;
+
+                    particles.clear();
+                    particles.shrink_to_fit();
 
                     score = 0;
                     scoreLabel.setString("Score: " + std::to_string(score));
@@ -483,6 +601,8 @@ int main()
 
                             bullets.push_back(bullet);
                             spaceHold = true;
+
+                            playSound(sounds, shootBuffer);
                         }
                     }
                     else
@@ -530,15 +650,20 @@ int main()
                 // collision stuff (not perfect but probably will be fine)
                 for (unsigned int i = 0; i < asteroids.size(); i++)
                 {
-                    if (objectsIntersect(player, *asteroids[i]))
+                    // check for player collision
+                    if (objectsIntersect(player, *asteroids[i]) && playerAlive)
                     {
                         playerAlive = false;
                         deathClock.restart();
+                        createExplosion(particles, player.position);
+                        playSound(sounds, explosionBuffer);
                     }
 
+                    // check for bullet collisions
                     for (unsigned int j = 0; j < bullets.size(); j++)
                         if (objectsIntersect(*asteroids[i], *bullets[j]))
                         {
+                            createExplosion(particles, bullets[j]->position);
                             splitAsteroid(asteroids, i);
                             removeObject(bullets, j);
 
@@ -548,6 +673,8 @@ int main()
                                 score += 10;
                                 scoreLabel.setString("Score: " + std::to_string(score));
                             }
+
+                            playSound(sounds, explosionBuffer);
                         }
                 }
 
@@ -623,11 +750,29 @@ int main()
                             {
                                 playerAlive = false;
                                 deathClock.restart();
+                                createExplosion(particles, player.position);
+                                playSound(sounds, explosionBuffer);
                             }
                 }
                 else
-                    if (deathClock.getElapsedTime().asSeconds() >= 3.0f)
+                {
+                    // three seconds before game goes back to title screen after player death
+                    if (deathClock.getElapsedTime().asSeconds() >= 2.0f) {
                         gameState = GameState::Title;
+                        if (score > highScore) {
+                            highScore = score;
+                            saveHighScore(highScore);
+                            highScoreLabel.setString("High Score: " + std::to_string(highScore));
+                        }
+                    }
+
+                    window.draw(gameOverLabel);
+
+                    if (score > highScore)
+                    {
+                        window.draw(newHighScoreLabel);
+                    }
+                }
 
                 // render all of the bullets
                 for (GameObject* bullet : bullets)
@@ -637,12 +782,47 @@ int main()
                 for (Asteroid* asteroid : asteroids)
                     render(*asteroid, window);
 
+                // update and render all of the particles
+                for (unsigned int i = 0; i < particles.size(); i++)
+                {
+                    particles[i]->position.x += particles[i]->moveDirection.x * deltaTime;
+                    particles[i]->position.y += particles[i]->moveDirection.y * deltaTime;
+                    render(particles[i], window);
+
+                    // clean up particles
+                    particles[i]->steps += deltaTime;
+                    if (particles[i]->steps >= 5.0f)
+                    {
+                        Particle* particle = particles[i];
+                        particles.erase(particles.begin() + i);
+                        delete particle;
+                    }
+                }
+
+                // resize particles vector
+                particles.shrink_to_fit();
+
+                for (unsigned int i = 0; i < sounds.size(); i++)
+                {
+                    if (sounds[i]->getStatus() != sf::SoundSource::Status::Playing)
+                    {
+                        sf::Sound* sound = sounds[i];
+                        sounds.erase(sounds.begin() + i);
+                        delete sound;
+                    }
+                }
+                
+                // resize sounds vector
+                sounds.shrink_to_fit();
+
                 // render score text
                 window.draw(scoreLabel);
             }
             break;
         }
         }
+
+        window.draw(highScoreLabel);
 
         // update window when all of the garbage is rendered
         window.display();
