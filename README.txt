@@ -34,3 +34,5 @@ Goal:
 
 Other Notes:
 - I never actually added settings to the game, so if the window is too big for you monitor then make your window scaling smaller in settings.
+- Also The linux one does not really work that well
+- There is at least one bug where the game crashes but I have not been able to figure it out
